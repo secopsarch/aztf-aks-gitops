@@ -1,0 +1,47 @@
+name: 'Terraform CI'
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'terraform/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'terraform/**'
+
+jobs:
+  terraform:
+    name: 'Terraform'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_version: 1.0.0
+
+    - name: Terraform Format
+      run: terraform fmt -check -recursive
+      working-directory: ./terraform
+
+    - name: Terraform Init
+      run: |
+        for env in dev staging prod; do
+          echo "Initializing $env environment..."
+          cd terraform/environments/$env
+          terraform init -backend=false
+          cd ../../../
+        done
+
+    - name: Terraform Validate
+      run: |
+        for env in dev staging prod; do
+          echo "Validating $env environment..."
+          cd terraform/environments/$env
+          terraform validate
+          cd ../../../
+        done 
