@@ -1,0 +1,15 @@
+---
+- name: Configure all servers
+  hosts: all
+  become: true
+  tasks:
+    - name: Include common playbook
+      ansible.builtin.import_playbook: common.yml
+
+    - name: Include Ubuntu playbook
+      ansible.builtin.import_playbook: ubuntu.yml
+      when: "'ubuntu' in group_names"
+
+    - name: Include RedHat playbook
+      ansible.builtin.import_playbook: redhat.yml
+      when: "'redhat' in group_names" 

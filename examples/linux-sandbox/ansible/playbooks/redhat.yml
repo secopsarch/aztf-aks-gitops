@@ -1,0 +1,48 @@
+---
+- name: Configure RedHat server
+  hosts: redhat
+  become: true
+  tasks:
+    - name: Install EPEL repository
+      dnf:
+        name: epel-release
+        state: present
+
+    - name: Install common packages
+      dnf:
+        name:
+          - curl
+          - wget
+          - git
+          - vim
+          - htop
+          - net-tools
+        state: present
+
+    - name: Install Docker
+      dnf:
+        name:
+          - docker
+          - docker-compose
+        state: present
+        enablerepo: extras
+
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user to docker group
+      user:
+        name: "{{ admin_username }}"
+        groups: docker
+        append: yes
+
+    - name: Install Python packages
+      pip:
+        name:
+          - docker
+          - docker-compose
+        state: present
+      become_user: "{{ admin_username }}" 

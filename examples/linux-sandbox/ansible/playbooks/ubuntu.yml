@@ -1,0 +1,43 @@
+---
+- name: Configure Ubuntu servers
+  hosts: ubuntu
+  become: true
+  tasks:
+    - name: Install common packages
+      apt:
+        name:
+          - curl
+          - wget
+          - git
+          - vim
+          - htop
+          - net-tools
+        state: present
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker.io
+          - docker-compose
+        state: present
+        update_cache: yes
+
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user to docker group
+      user:
+        name: "{{ admin_username }}"
+        groups: docker
+        append: yes
+
+    - name: Install Python packages
+      pip:
+        name:
+          - docker
+          - docker-compose
+        state: present
+      become_user: "{{ admin_username }}" 

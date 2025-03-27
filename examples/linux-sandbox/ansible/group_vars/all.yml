@@ -1,0 +1,23 @@
+---
+# SSH Configuration
+ssh_private_key_path: "~/.ssh/id_rsa"
+admin_username: "adminuser"
+
+# System Configuration
+timezone: "UTC"
+ntp_servers:
+  - "0.pool.ntp.org"
+  - "1.pool.ntp.org"
+  - "2.pool.ntp.org"
+
+# Package Management
+update_cache: true
+update_packages: true
+
+# Security
+fail2ban_enabled: true
+ufw_enabled: true
+allowed_ports:
+  - "22"
+  - "80"
+  - "443" 

@@ -1,0 +1,21 @@
+all:
+  children:
+    ubuntu:
+      hosts:
+        ubuntu1:
+          ansible_host: "{{ ubuntu1_public_ip }}"
+          ansible_user: "{{ admin_username }}"
+          ansible_ssh_private_key_file: "{{ ssh_private_key_path }}"
+        ubuntu2:
+          ansible_host: "{{ ubuntu2_public_ip }}"
+          ansible_user: "{{ admin_username }}"
+          ansible_ssh_private_key_file: "{{ ssh_private_key_path }}"
+    redhat:
+      hosts:
+        redhat:
+          ansible_host: "{{ redhat_public_ip }}"
+          ansible_user: "{{ admin_username }}"
+          ansible_ssh_private_key_file: "{{ ssh_private_key_path }}"
+    all:
+      vars:
+        ansible_python_interpreter: /usr/bin/python3 
