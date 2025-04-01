@@ -7,6 +7,70 @@ terraform {
   }
 }
 
+# Custom data script for Ansible installation
+locals {
+  ansible_install_script = <<CUSTOM_DATA
+#!/bin/bash
+
+# Function to install Ansible on Ubuntu
+install_ansible_ubuntu() {
+    apt-get update
+    apt-get install -y software-properties-common
+    apt-add-repository --yes --update ppa:ansible/ansible
+    apt-get install -y ansible
+    apt-get install -y python3-pip
+    pip3 install --upgrade pip
+    pip3 install ansible
+}
+
+# Function to install Ansible on RedHat
+install_ansible_redhat() {
+    dnf install -y epel-release
+    dnf install -y ansible
+    dnf install -y python3-pip
+    pip3 install --upgrade pip
+    pip3 install ansible
+}
+
+# Detect OS and install Ansible
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$NAME
+    VERSION=$VERSION_ID
+fi
+
+case $OS in
+    "Ubuntu")
+        install_ansible_ubuntu
+        ;;
+    "Red Hat Enterprise Linux")
+        install_ansible_redhat
+        ;;
+    *)
+        echo "Unsupported operating system: $OS"
+        exit 1
+        ;;
+esac
+
+# Create ansible user and setup SSH
+useradd -m -s /bin/bash ansible
+mkdir -p /home/ansible/.ssh
+chmod 700 /home/ansible/.ssh
+
+# Add ansible user to sudoers
+echo "ansible ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/ansible
+chmod 0440 /etc/sudoers.d/ansible
+
+# Create authorized_keys file
+touch /home/ansible/.ssh/authorized_keys
+chmod 600 /home/ansible/.ssh/authorized_keys
+chown -R ansible:ansible /home/ansible/.ssh
+
+# Verify Ansible installation
+ansible --version
+CUSTOM_DATA
+}
+
 # Resource Group
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
@@ -58,7 +122,7 @@ resource "azurerm_public_ip" "ubuntu1_pip" {
   name                = "${var.prefix}-ubuntu1-pip"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Dynamic"
+  allocation_method   = "Static"
   domain_name_label   = "${var.prefix}-ubuntu1"
 
   tags = var.tags
@@ -68,7 +132,7 @@ resource "azurerm_public_ip" "ubuntu2_pip" {
   name                = "${var.prefix}-ubuntu2-pip"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Dynamic"
+  allocation_method   = "Static"
   domain_name_label   = "${var.prefix}-ubuntu2"
 
   tags = var.tags
@@ -78,7 +142,7 @@ resource "azurerm_public_ip" "redhat_pip" {
   name                = "${var.prefix}-redhat-pip"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Dynamic"
+  allocation_method   = "Static"
   domain_name_label   = "${var.prefix}-redhat"
 
   tags = var.tags
@@ -159,7 +223,7 @@ resource "azurerm_linux_virtual_machine" "ubuntu1" {
 
   admin_ssh_key {
     username   = var.admin_username
-    public_key = var.ssh_public_key
+    public_key = file(var.ssh_public_key)
   }
 
   os_disk {
@@ -173,6 +237,8 @@ resource "azurerm_linux_virtual_machine" "ubuntu1" {
     sku       = "18.04-LTS"
     version   = "latest"
   }
+
+  custom_data = base64encode(local.ansible_install_script)
 
   tags = var.tags
 }
@@ -189,7 +255,7 @@ resource "azurerm_linux_virtual_machine" "ubuntu2" {
 
   admin_ssh_key {
     username   = var.admin_username
-    public_key = var.ssh_public_key
+    public_key = file(var.ssh_public_key)
   }
 
   os_disk {
@@ -203,6 +269,8 @@ resource "azurerm_linux_virtual_machine" "ubuntu2" {
     sku       = "18.04-LTS"
     version   = "latest"
   }
+
+  custom_data = base64encode(local.ansible_install_script)
 
   tags = var.tags
 }
@@ -220,7 +288,7 @@ resource "azurerm_linux_virtual_machine" "redhat" {
 
   admin_ssh_key {
     username   = var.admin_username
-    public_key = var.ssh_public_key
+    public_key = file(var.ssh_public_key)
   }
 
   os_disk {
@@ -234,6 +302,8 @@ resource "azurerm_linux_virtual_machine" "redhat" {
     sku       = "8-lvm-gen2"
     version   = "latest"
   }
+
+  custom_data = base64encode(local.ansible_install_script)
 
   tags = var.tags
 } 
