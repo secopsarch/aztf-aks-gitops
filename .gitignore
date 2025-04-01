@@ -1,6 +1,7 @@
+
 # Local .terraform directories
-**/.terraform/*
-**/ssh-keys/*
+**/.terraform/
+**/ssh-keys/ #This will ensure that all ssh-keys directories anywhere in the repository are ignored, including nested
 
 # .tfstate files
 *.tfstate
