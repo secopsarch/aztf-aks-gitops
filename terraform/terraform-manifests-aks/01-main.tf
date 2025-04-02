@@ -36,7 +36,6 @@ terraform {
 }
 
 
-
 # 2. Terraform Provider Block for AzureRM
 provider "azurerm" {
   features {
@@ -45,6 +44,7 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
+  subscription_id = "01bfbbdc-7cd9-42c4-9f81-fcd897c18fa8"
 }
 
 # 3. Terraform Resource Block: Define a Random Pet Resource

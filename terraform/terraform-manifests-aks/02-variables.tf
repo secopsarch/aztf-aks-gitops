@@ -29,7 +29,7 @@ variable "environment" {
 
 # SSH Public Key for Linux VMs
 variable "ssh_public_key" {
-  default     = "../ssh-keys/id_rsa.pub"
+  default     = "ssh-keys/id_rsa.pub"
   description = "This variable defines the SSH Public Key for Linux k8s Worker nodes"
 }
 
