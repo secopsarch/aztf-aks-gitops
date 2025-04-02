@@ -4,11 +4,11 @@
 RESOURCE_GROUP="akslab02"           # Resource group name
 CLUSTER_NAME="test-aks02"           # AKS cluster name
 NODE_COUNT=1                        # Number of nodes to start with
-VM_SIZE="Standard_B2ps_v2"          # VM size for nodes (Standard_B2ps_v2)
+VM_SIZE="Standard_B2pls_v2"          # VM size for nodes (Standard_B2ps_v2)
 LOCATION="southeastasia"            # Azure region for the cluster
 K8S_VERSION="1.31.6"                # Kubernetes version
 ADMIN_GROUP_NAME="AKSAdmins"        # Name of the admin group for RBAC
-ADMIN_USER_EMAIL=""                 # Email of the admin user (to be filled)
+ADMIN_USER_EMAIL="user1@learnazcloud06outlook.onmicrosoft.com"  # Email of the admin user (to be filled)
 
 # Function to check if a command exists
 command_exists() {
@@ -77,6 +77,7 @@ az aks create \
     --name $CLUSTER_NAME \
     --node-count $NODE_COUNT \
     --enable-azure-rbac \
+    --enable-aad \
     --aad-admin-group-object-ids $ADMIN_GROUP_ID \
     --generate-ssh-keys \
     --node-vm-size $VM_SIZE \
@@ -85,9 +86,9 @@ az aks create \
     --network-plugin azure \
     --network-policy azure \
     --enable-managed-identity \
-    --enable-cluster-autoscaler \
-    --min-count 1 \
-    --max-count 2
+#    --enable-cluster-autoscaler \
+#    --min-count 1 \
+#    --max-count 2
 
 # Check if cluster creation was successful
 if [ $? -ne 0 ]; then
