@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Variables
-RESOURCE_GROUP="akslab01"           # Resource group name
-CLUSTER_NAME="test-aks01"           # AKS cluster name
+RESOURCE_GROUP="akslab02"           # Resource group name
+CLUSTER_NAME="test-aks02"           # AKS cluster name
 NODE_COUNT=1                        # Number of nodes to start with
 VM_SIZE="Standard_B2ps_v2"          # VM size for nodes (Standard_B2ps_v2)
 LOCATION="southeastasia"            # Azure region for the cluster
@@ -87,7 +87,7 @@ az aks create \
     --enable-managed-identity \
     --enable-cluster-autoscaler \
     --min-count 1 \
-    --max-count 3
+    --max-count 2
 
 # Check if cluster creation was successful
 if [ $? -ne 0 ]; then
