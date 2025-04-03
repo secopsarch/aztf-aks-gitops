@@ -4,32 +4,82 @@ This project implements a three-tier application architecture on Azure using Ter
 
 ## Architecture Overview
 
-```
-                                     ┌──────────────────┐
-                                     │                  │
-                                     │  Azure Container │
-                                     │    Registry      │
-                                     │                  │
-                                     └──────────────────┘
-                                             ▲
-                                             │
-┌──────────────────┐                        │
-│                  │                ┌────────┴───────┐
-│   Application    │                │                │
-│    Gateway       │◄───────────────┤   AKS Cluster │
-│   (WAF v2)       │                │                │
-│                  │                └────────┬───────┘
-└──────────────────┘                        │
-         ▲                                  │
-         │                                  ▼
-         │                         ┌──────────────────┐
-         │                         │                  │
-         └─────────────────────────┤  MySQL Flexible │
-                                  │    Server        │
-                                  │                  │
-                                  └──────────────────┘
+```mermaid
+graph TB
+    subgraph Internet
+        Users((Internet Users))
+    end
 
+    subgraph Azure["Azure Cloud"]
+        subgraph Network["Virtual Network"]
+            subgraph WebTier["Web Tier"]
+                AppGW["Application Gateway<br/>(WAF v2)"]
+            end
+
+            subgraph AppTier["Application Tier"]
+                AKS["AKS Cluster"]
+                ACR["Azure Container<br/>Registry"]
+            end
+
+            subgraph DBTier["Database Tier"]
+                MySQL["MySQL Flexible<br/>Server"]
+                DNS["Private DNS Zone"]
+            end
+        end
+    end
+
+    %% Connections
+    Users -->|HTTPS| AppGW
+    AppGW -->|HTTP/HTTPS| AKS
+    AKS -->|Pull Images| ACR
+    AKS -->|Private Connection| MySQL
+    MySQL -.->|DNS Resolution| DNS
+
+    %% Styling
+    classDef azure fill:#0072C6,stroke:#fff,stroke-width:2px,color:#fff
+    classDef network fill:#5A6B7B,stroke:#fff,stroke-width:2px,color:#fff
+    classDef tier fill:#2C5066,stroke:#fff,stroke-width:2px,color:#fff
+    
+    class AppGW,AKS,ACR,MySQL,DNS azure
+    class Network network
+    class WebTier,AppTier,DBTier tier
 ```
+
+## Network Architecture Details
+
+### Virtual Network Configuration
+- **Address Space**: `10.0.0.0/16`
+- **Subnets**:
+  1. Web Subnet (Application Gateway)
+     - CIDR: `10.0.1.0/24`
+     - NSG: Allows ports 80/443 inbound
+  2. App Subnet (AKS)
+     - CIDR: `10.0.2.0/24`
+     - NSG: Allows internal traffic
+  3. DB Subnet (MySQL)
+     - CIDR: `10.0.3.0/24`
+     - NSG: Allows only internal access
+
+### Security Flow
+1. **Internet Traffic**
+   ```mermaid
+   flowchart LR
+       A[Internet] -->|WAF Protection| B[App Gateway] -->|TLS| C[AKS Pods]
+   ```
+
+2. **Application Flow**
+   ```mermaid
+   flowchart LR
+       A[AKS Pods] -->|Pull| B[ACR]
+       A -->|Private Link| C[MySQL]
+   ```
+
+3. **Private Connectivity**
+   ```mermaid
+   flowchart LR
+       A[Services] -->|Query| B[Private DNS]
+       B -->|Resolve| C[Private Endpoints]
+   ```
 
 ## Components
 
@@ -43,32 +93,40 @@ This project implements a three-tier application architecture on Azure using Ter
 
 2. **Application Gateway Module (`appgateway`)**
    - WAF v2 SKU
-   - Public IP
-   - HTTP Listeners
-   - Backend Pools
-   - Health Probes
+   - Public IP for external access
+   - HTTP/HTTPS Listeners
+   - Backend Pools targeting AKS
+   - Health Probes for monitoring
+   - SSL/TLS termination
 
 3. **AKS Module (`aks`)**
    - Managed Kubernetes Cluster
    - System and User Node Pools
-   - Auto-scaling Configuration
-   - Network Integration
+   - Auto-scaling (${var.min_count} to ${var.max_count} nodes)
+   - CNI Networking
+   - Managed Identity
+   - Azure Monitor Integration
 
 4. **MySQL Module (`mysql`)**
    - Azure Database for MySQL Flexible Server
    - Private Endpoint Connection
+   - Automated Backups
+   - High Availability Configuration
    - Firewall Rules
-   - Database Configuration
+   - Performance Monitoring
 
 5. **Private DNS Module (`private_dns`)**
    - Private DNS Zone for MySQL
+   - Automatic Registration
    - Virtual Network Links
-   - A Records
+   - A Records for Services
 
 6. **ACR Module (`acr`)**
-   - Azure Container Registry
-   - Premium SKU
-   - Admin Access
+   - Azure Container Registry (Premium SKU)
+   - Geo-replication Ready
+   - Private Link Support
+   - Image Scanning
+   - Webhook Integration
 
 ## Network Security
 
