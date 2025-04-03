@@ -31,10 +31,10 @@ module "network" {
 module "privatedns" {
   source = "../../terraform/modules/private_dns"
 
-  resource_group_name    = local.resource_group_name
-  zone_name             = var.private_dns_zone_name
-  virtual_network_ids   = [module.network.vnet_id]
-  registration_enabled  = true
+  resource_group_name  = local.resource_group_name
+  zone_name            = var.private_dns_zone_name
+  virtual_network_ids  = [module.network.vnet_id]
+  registration_enabled = true
   a_records = {
     "mysql" = {
       ttl     = 300
@@ -71,8 +71,8 @@ module "mysql" {
   administrator_password = var.mysql_administrator_password
 
   storage_size_gb = var.mysql_storage_size_gb
-  sku_name       = var.mysql_sku_name
-  tags           = local.tags
+  sku_name        = var.mysql_sku_name
+  tags            = local.tags
 }
 
 # Application Gateway Module
@@ -92,7 +92,7 @@ module "appgateway" {
 module "aks" {
   source = "../../terraform/modules/aks"
 
-  cluster_name         = var.cluster_name
+  cluster_name        = var.cluster_name
   location            = local.location
   resource_group_name = local.resource_group_name
   dns_prefix          = var.cluster_dns_prefix

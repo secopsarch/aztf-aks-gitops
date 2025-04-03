@@ -80,7 +80,7 @@ variable "mysql_administrator_password" {
   description = "The administrator password for the MySQL server"
   type        = string
   sensitive   = true
-  default     = "Demo1@Password123"  # In production, use a secure method to manage passwords
+  default     = "Demo1@Password123" # In production, use a secure method to manage passwords
 }
 
 variable "mysql_storage_size_gb" {

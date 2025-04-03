@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Flask App - Home{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>Welcome to Flask App</h1>
+    <p>A modern web application with Flask and CSS</p>
+</div>
+
+<div class="info-cards">
+    <div class="card">
+        <h2>Container Info</h2>
+        <div class="info-item">
+            <span class="label">Hostname:</span>
+            <span class="value">{{ system_info.hostname }}</span>
+        </div>
+        <div class="info-item">
+            <span class="label">IP Address:</span>
+            <span class="value">{{ system_info.ip }}</span>
+        </div>
+        <div class="info-item">
+            <span class="label">Platform:</span>
+            <span class="value">{{ system_info.platform }}</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>System Status</h2>
+        <div class="info-item">
+            <span class="label">Python Version:</span>
+            <span class="value">{{ system_info.python_version }}</span>
+        </div>
+        <div class="info-item">
+            <span class="label">Container ID:</span>
+            <span class="value">{{ system_info.container_id }}</span>
+        </div>
+    </div>
+</div>
+{% endblock %} 

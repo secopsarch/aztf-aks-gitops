@@ -33,7 +33,7 @@ resource "azurerm_kubernetes_cluster" "aks_cluster" {
   node_resource_group = "${azurerm_resource_group.aks_rg.name}-nrg"
 
   default_node_pool {
-    name                 = "defaultsystempool"
+    name                 = "systempool"
     vm_size              = "Standard_DS2_v2"
 #    vnet_subnet_id     = azurerm_subnet.aks_subnet.id
     orchestrator_version = data.azurerm_kubernetes_service_versions.current.latest_version
