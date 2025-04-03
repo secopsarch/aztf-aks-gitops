@@ -107,6 +107,12 @@ variable "app_gateway_sku" {
   default     = "Standard_v2"
 }
 
+variable "app_gateway_sku_tier" {
+  description = "SKU tier for the Application Gateway"
+  type        = string
+  default     = "Standard_v2"
+}
+
 variable "app_gateway_capacity" {
   description = "The capacity of the Application Gateway"
   type        = number
@@ -134,13 +140,13 @@ variable "kubernetes_version" {
 variable "node_count" {
   description = "The number of nodes in the AKS cluster"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "vm_size" {
   description = "The size of the VMs in the AKS cluster"
   type        = string
-  default     = "Standard_D2s_v3"
+  default     = "Standard_D2s_v3" # Standard_DS2_v2
 }
 
 variable "min_count" {
@@ -152,7 +158,7 @@ variable "min_count" {
 variable "max_count" {
   description = "The maximum number of nodes in the AKS cluster"
   type        = number
-  default     = 3
+  default     = 2
 }
 
 variable "tags" {

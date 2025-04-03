@@ -1,183 +1,166 @@
-# Azure Three-Tier Application Infrastructure Demo
+# Azure Three-Tier Application Infrastructure
 
-This example demonstrates a production-grade three-tier application infrastructure on Azure using Terraform. The infrastructure includes a web tier (Application Gateway), application tier (AKS), and data tier (MySQL Flexible Server) with proper networking and security configurations.
+This project implements a three-tier application architecture on Azure using Terraform. The architecture consists of web, application, and database tiers with proper network segmentation and security controls.
 
 ## Architecture Overview
 
-```mermaid
-graph TB
-    subgraph "Public Internet"
-        Client[Client]
-    end
+```
+                                     ┌──────────────────┐
+                                     │                  │
+                                     │  Azure Container │
+                                     │    Registry      │
+                                     │                  │
+                                     └──────────────────┘
+                                             ▲
+                                             │
+┌──────────────────┐                        │
+│                  │                ┌────────┴───────┐
+│   Application    │                │                │
+│    Gateway       │◄───────────────┤   AKS Cluster │
+│   (WAF v2)       │                │                │
+│                  │                └────────┬───────┘
+└──────────────────┘                        │
+         ▲                                  │
+         │                                  ▼
+         │                         ┌──────────────────┐
+         │                         │                  │
+         └─────────────────────────┤  MySQL Flexible │
+                                  │    Server        │
+                                  │                  │
+                                  └──────────────────┘
 
-    subgraph "Azure Infrastructure"
-        subgraph "Web Tier"
-            AG[Application Gateway]
-        end
-
-        subgraph "Application Tier"
-            AKS[AKS Cluster]
-            ACR[Azure Container Registry]
-        end
-
-        subgraph "Data Tier"
-            MySQL[MySQL Flexible Server]
-        end
-
-        subgraph "Networking"
-            VNET[Virtual Network]
-            DNS[Private DNS Zone]
-        end
-    end
-
-    Client --> AG
-    AG --> AKS
-    AKS --> ACR
-    AKS --> MySQL
-    AKS --> DNS
-    MySQL --> DNS
-    VNET --> AG
-    VNET --> AKS
-    VNET --> MySQL
 ```
 
-## Infrastructure Components
+## Components
 
-1. **Networking**
-   - Virtual Network with three subnets (web, app, db)
+1. **Network Module (`network`)**
+   - Virtual Network with three subnets:
+     - Web Subnet (Application Gateway)
+     - App Subnet (AKS)
+     - DB Subnet (MySQL)
    - Network Security Groups
-   - Private DNS Zone for database access
+   - Route Tables
 
-2. **Web Tier**
-   - Application Gateway with WAF enabled
-   - Public IP for external access
-   - SSL/TLS termination
+2. **Application Gateway Module (`appgateway`)**
+   - WAF v2 SKU
+   - Public IP
+   - HTTP Listeners
+   - Backend Pools
+   - Health Probes
 
-3. **Application Tier**
-   - Azure Kubernetes Service (AKS)
-   - Azure Container Registry (ACR)
-   - System-assigned managed identity
-   - Auto-scaling enabled
+3. **AKS Module (`aks`)**
+   - Managed Kubernetes Cluster
+   - System and User Node Pools
+   - Auto-scaling Configuration
+   - Network Integration
 
-4. **Data Tier**
-   - MySQL Flexible Server
-   - Private access only
-   - Automated backups
-   - High availability configuration
+4. **MySQL Module (`mysql`)**
+   - Azure Database for MySQL Flexible Server
+   - Private Endpoint Connection
+   - Firewall Rules
+   - Database Configuration
+
+5. **Private DNS Module (`private_dns`)**
+   - Private DNS Zone for MySQL
+   - Virtual Network Links
+   - A Records
+
+6. **ACR Module (`acr`)**
+   - Azure Container Registry
+   - Premium SKU
+   - Admin Access
+
+## Network Security
+
+- Each tier is isolated in its own subnet
+- Private endpoints for database access
+- Application Gateway WAF protection
+- Network Security Groups with proper rules
+- Private DNS resolution
 
 ## Prerequisites
 
-- Azure CLI installed
-- Terraform >= 1.0.0
-- Azure subscription with appropriate permissions
-- Service Principal with necessary permissions
+1. Azure Subscription
+2. Azure CLI installed
+3. Terraform installed (v1.0.0+)
+4. Proper Azure permissions
 
 ## Usage
 
-1. **Initialize Terraform**
-   ```bash
-   terraform init
-   ```
+1. Initialize Terraform:
+```bash
+terraform init
+```
 
-2. **Review the Plan**
-   ```bash
-   terraform plan
-   ```
+2. Review the plan:
+```bash
+terraform plan
+```
 
-3. **Apply the Infrastructure**
-   ```bash
-   terraform apply
-   ```
-
-4. **Destroy the Infrastructure**
-   ```bash
-   terraform destroy
-   ```
+3. Apply the configuration:
+```bash
+terraform apply
+```
 
 ## Variables
 
-Key variables that can be customized:
+Key variables that need to be configured:
 
-- `environment`: Environment name (e.g., "prod", "dev")
+- `resource_group_name`: Name of the resource group
 - `location`: Azure region
-- `cluster_name`: AKS cluster name
-- `acr_name`: Azure Container Registry name
-- `mysql_server_name`: MySQL server name
-- `app_gateway_name`: Application Gateway name
+- `environment`: Environment name (e.g., dev, prod)
+- `address_space`: VNet address space
+- `mysql_administrator_password`: MySQL admin password
+- `kubernetes_version`: AKS version
 
 ## Outputs
 
-The infrastructure provides the following outputs:
-
 - `aks_cluster_name`: Name of the AKS cluster
-- `aks_kube_config`: Kubernetes configuration
 - `acr_login_server`: ACR login server URL
 - `mysql_server_fqdn`: MySQL server FQDN
-- `app_gateway_public_ip`: Application Gateway public IP
+- `application_gateway_ip`: Application Gateway public IP
 
 ## Security Considerations
 
-1. **Network Security**
-   - Private subnets for application and database tiers
-   - NSGs with minimal required rules
-   - Private DNS for database access
+1. Network Security:
+   - Subnets are isolated
+   - NSGs control traffic flow
+   - Private endpoints for services
 
-2. **Access Control**
-   - Managed identities for AKS
+2. Access Control:
    - RBAC enabled on AKS
-   - Private access for MySQL
+   - MySQL uses private endpoints
+   - ACR with admin access disabled
 
-3. **Data Protection**
-   - SSL/TLS encryption
-   - Automated backups
-   - WAF protection
-
-## Monitoring and Maintenance
-
-1. **Monitoring**
+3. Monitoring:
    - Azure Monitor integration
-   - Container insights enabled
-   - Application Gateway metrics
-
-2. **Maintenance**
-   - Automated updates for AKS
-   - Automated backups for MySQL
-   - Rolling updates support
+   - Log Analytics workspace
+   - Container insights
 
 ## Cost Optimization
 
-1. **Resource Sizing**
-   - Auto-scaling enabled
-   - Appropriate VM sizes
-   - Reserved instances available
+- Auto-scaling enabled for AKS
+- Proper SKU selection for services
+- Resource tagging for cost allocation
 
-2. **Storage**
-   - Managed disks
-   - Appropriate storage tiers
+## Maintenance
 
-## Troubleshooting
+1. Regular Updates:
+   - AKS version upgrades
+   - Security patches
+   - Infrastructure updates
 
-Common issues and solutions:
-
-1. **AKS Connection**
-   ```bash
-   az aks get-credentials --resource-group <resource_group> --name <cluster_name>
-   ```
-
-2. **Database Access**
-   - Verify private DNS zone configuration
-   - Check NSG rules
-   - Validate MySQL firewall rules
-
-3. **Application Gateway**
-   - Check WAF rules
-   - Verify SSL certificate
-   - Review backend pool configuration
+2. Backup Strategy:
+   - MySQL automated backups
+   - AKS state backup
+   - Infrastructure state backup
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](../../CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](../../LICENSE) file for details. 
+This project is licensed under the MIT License. 

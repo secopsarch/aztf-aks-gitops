@@ -16,6 +16,7 @@ variable "subnet_id" {
 variable "backend_fqdns" {
   description = "List of FQDNs for the backend pool"
   type        = list(string)
+  default     = []
 }
 
 variable "backend_port" {
@@ -23,7 +24,11 @@ variable "backend_port" {
   type        = number
   default     = 80
 }
-
+#variable "app_gateway_name" {
+#  description = "The name of the Application Gateway"
+#  type        = string
+#  default     = "demo1-appgateway"
+#}
 variable "sku_name" {
   description = "SKU name for the Application Gateway"
   type        = string

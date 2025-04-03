@@ -1,3 +1,19 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = ">=3.0.0"
+    }
+  }
+  # Terraform State Storage to Azure Storage Container
+  backend "azurerm" {
+    resource_group_name  = "tf-statestorage-rg"
+    storage_account_name = "azlabstatefilestorage"
+    container_name       = "k8statefiles"
+    key                  = "flask-app.terraform.tfstate"
+  }
+}
+
 provider "azurerm" {
   features {}
 }
@@ -10,15 +26,22 @@ locals {
   tags = {
     Environment = local.environment
     ManagedBy   = "Terraform"
-    Project     = "Demo1"
+    Project     = "3-Tier-App"
   }
+}
+
+# Resource Group
+resource "azurerm_resource_group" "rg" {
+  name     = local.resource_group_name
+  location = local.location
+  tags     = local.tags
 }
 
 # Network Module
 module "network" {
   source = "../../terraform/modules/network"
 
-  resource_group_name = local.resource_group_name
+  resource_group_name = azurerm_resource_group.rg.name
   location            = local.location
   address_space       = var.address_space
   web_subnet_prefixes = var.web_subnet_prefixes
@@ -28,12 +51,12 @@ module "network" {
 }
 
 # Private DNS Zone Module
-module "privatedns" {
+module "private_dns" {
   source = "../../terraform/modules/private_dns"
 
-  resource_group_name  = local.resource_group_name
-  zone_name            = var.private_dns_zone_name
-  virtual_network_ids  = [module.network.vnet_id]
+  resource_group_name  = azurerm_resource_group.rg.name
+  zone_name           = var.private_dns_zone_name
+  virtual_network_ids = [module.network.vnet_id]
   registration_enabled = true
   a_records = {
     "mysql" = {
@@ -49,7 +72,7 @@ module "acr" {
   source = "../../terraform/modules/acr"
 
   acr_name            = var.acr_name
-  resource_group_name = local.resource_group_name
+  resource_group_name = azurerm_resource_group.rg.name
   location            = local.location
   sku                 = var.acr_sku
   admin_enabled       = true
@@ -60,12 +83,12 @@ module "acr" {
 module "mysql" {
   source = "../../terraform/modules/mysql"
 
-  resource_group_name = local.resource_group_name
+  resource_group_name = azurerm_resource_group.rg.name
   location            = local.location
   server_name         = var.mysql_server_name
   database_name       = var.mysql_database_name
   subnet_id           = module.network.db_subnet_id
-  private_dns_zone_id = module.privatedns.dns_zone_id
+  private_dns_zone_id = module.private_dns.dns_zone_id
 
   administrator_login    = var.mysql_administrator_login
   administrator_password = var.mysql_administrator_password
@@ -79,12 +102,14 @@ module "mysql" {
 module "appgateway" {
   source = "../../terraform/modules/appgateway"
 
-  resource_group_name = local.resource_group_name
+  app_gateway_name    = var.app_gateway_name
+  resource_group_name = azurerm_resource_group.rg.name
   location            = local.location
   subnet_id           = module.network.web_subnet_id
-  app_gateway_name    = var.app_gateway_name
   sku_name            = var.app_gateway_sku
+  sku_tier            = var.app_gateway_sku_tier
   capacity            = var.app_gateway_capacity
+  backend_fqdns       = []
   tags                = local.tags
 }
 
@@ -94,9 +119,9 @@ module "aks" {
 
   cluster_name        = var.cluster_name
   location            = local.location
-  resource_group_name = local.resource_group_name
-  dns_prefix          = var.cluster_dns_prefix
-  kubernetes_version  = var.kubernetes_version
+  resource_group_name = azurerm_resource_group.rg.name
+  dns_prefix         = var.cluster_dns_prefix
+  kubernetes_version = var.kubernetes_version
 
   node_count = var.node_count
   vm_size    = var.vm_size
@@ -105,4 +130,9 @@ module "aks" {
 
   subnet_id = module.network.app_subnet_id
   tags      = local.tags
-} 
+
+  depends_on = [
+    module.network,
+    module.acr
+  ]
+}
