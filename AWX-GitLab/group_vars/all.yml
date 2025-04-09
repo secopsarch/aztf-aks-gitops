@@ -1,0 +1,25 @@
+---
+# Common variables for all hosts
+ansible_ssh_private_key_file: "{{ playbook_dir }}/../.ssh/id_rsa"
+ansible_winrm_server_cert_validation: ignore
+
+# Timezone settings
+timezone: UTC
+
+# NTP settings
+ntp_servers:
+  - 0.pool.ntp.org
+  - 1.pool.ntp.org
+  - 2.pool.ntp.org
+
+# System settings
+sysctl_settings:
+  net.ipv4.ip_forward: 0
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.conf.default.send_redirects: 0
+
+# Package management
+package_manager:
+  debian: apt
+  redhat: yum
+  windows: chocolatey 

@@ -1,0 +1,51 @@
+image: python:3.9
+
+stages:
+  - lint
+  - test
+  - deploy
+
+variables:
+  ANSIBLE_FORCE_COLOR: 1
+
+before_script:
+  - pip install ansible ansible-lint
+  - mkdir -p ~/.ssh
+  - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+  - chmod 600 ~/.ssh/id_rsa
+  - echo "$ANSIBLE_VAULT_PASSWORD" > ~/.vault_pass.txt
+  - chmod 600 ~/.vault_pass.txt
+
+lint:
+  stage: lint
+  script:
+    - ansible-lint playbooks/*.yml
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+test:
+  stage: test
+  script:
+    - ansible-playbook playbooks/site.yml -i inventories/dev/hosts.yml --check --diff
+    - ansible-playbook playbooks/compliance.yml -i inventories/dev/hosts.yml --check --diff
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+deploy_dev:
+  stage: deploy
+  script:
+    - ansible-playbook playbooks/site.yml -i inventories/dev/hosts.yml --vault-password-file ~/.vault_pass.txt
+  environment:
+    name: development
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+deploy_prod:
+  stage: deploy
+  script:
+    - ansible-playbook playbooks/site.yml -i inventories/prod/hosts.yml --vault-password-file ~/.vault_pass.txt
+  environment:
+    name: production
+  when: manual
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" 

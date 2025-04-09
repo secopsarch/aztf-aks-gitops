@@ -1,0 +1,72 @@
+---
+- name: Install Apache
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - apache2
+    - apache2-utils
+  when: ansible_os_family == "Debian"
+
+- name: Install Apache (RHEL)
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - httpd
+    - mod_ssl
+  when: ansible_os_family == "RedHat"
+
+- name: Create document root
+  file:
+    path: "{{ web_server.document_root }}"
+    state: directory
+    owner: apache
+    group: apache
+    mode: '0755'
+
+- name: Configure Apache
+  template:
+    src: apache.conf.j2
+    dest: /etc/apache2/apache2.conf
+    owner: root
+    group: root
+    mode: '0644'
+  when: ansible_os_family == "Debian"
+  notify: restart apache
+
+- name: Configure Apache (RHEL)
+  template:
+    src: httpd.conf.j2
+    dest: /etc/httpd/conf/httpd.conf
+    owner: root
+    group: root
+    mode: '0644'
+  when: ansible_os_family == "RedHat"
+  notify: restart apache
+
+- name: Configure SSL
+  template:
+    src: ssl.conf.j2
+    dest: /etc/apache2/sites-available/default-ssl.conf
+    owner: root
+    group: root
+    mode: '0644'
+  when: ansible_os_family == "Debian" and ssl.enabled
+  notify: restart apache
+
+- name: Enable SSL site
+  command: a2ensite default-ssl
+  when: ansible_os_family == "Debian" and ssl.enabled
+  notify: restart apache
+
+- name: Enable SSL module
+  command: a2enmod ssl
+  when: ansible_os_family == "Debian" and ssl.enabled
+  notify: restart apache
+
+- name: Start and enable Apache
+  service:
+    name: "{{ 'apache2' if ansible_os_family == 'Debian' else 'httpd' }}"
+    state: started
+    enabled: yes 

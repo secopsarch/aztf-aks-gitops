@@ -1,0 +1,12 @@
+---
+- name: restart ntp
+  service:
+    name: ntp
+    state: restarted
+  when: ansible_os_family != "Windows"
+
+- name: restart sshd
+  service:
+    name: sshd
+    state: restarted
+  when: ansible_os_family != "Windows" 

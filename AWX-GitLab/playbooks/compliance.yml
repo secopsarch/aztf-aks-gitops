@@ -1,0 +1,45 @@
+---
+- name: Apply security compliance to Linux systems
+  hosts: linux_servers
+  become: true
+  tasks:
+    - name: Ensure SSH configuration is secure
+      template:
+        src: ../roles/common/templates/sshd_config.j2
+        dest: /etc/ssh/sshd_config
+        owner: root
+        group: root
+        mode: '0600'
+      notify: restart sshd
+
+    - name: Ensure password aging is configured
+      lineinfile:
+        path: /etc/login.defs
+        regexp: '^PASS_MAX_DAYS'
+        line: 'PASS_MAX_DAYS 90'
+      notify: restart sshd
+
+    - name: Ensure root login is disabled
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PermitRootLogin'
+        line: 'PermitRootLogin no'
+      notify: restart sshd
+
+- name: Apply security compliance to Windows systems
+  hosts: windows_servers
+  become: true
+  tasks:
+    - name: Ensure Windows Defender is enabled
+      win_defender:
+        state: enabled
+
+    - name: Configure Windows Firewall
+      win_firewall_rule:
+        name: Allow RDP
+        localport: 3389
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes 

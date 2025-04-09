@@ -37,7 +37,7 @@ variable "subnet_prefixes" {
 variable "vm_size" {
   description = "The size of the VMs"
   type        = string
-  default     = "Standard_B1s"  # Low cost VM size
+  default     = "Standard_B1s" # Low cost VM size
 }
 
 variable "admin_username" {
@@ -48,4 +48,4 @@ variable "admin_username" {
 
 variable "ssh_public_key" {
   description = "The SSH public key for VM access"
-} 
+}

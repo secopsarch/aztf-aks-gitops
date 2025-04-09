@@ -1,0 +1,32 @@
+---
+# Web server configuration
+web_server:
+  type: apache
+  version: 2.4
+  document_root: /var/www/html
+  ports:
+    - 80
+    - 443
+
+# SSL configuration
+ssl:
+  enabled: true
+  certificate_path: /etc/ssl/certs/webserver.crt
+  key_path: /etc/ssl/private/webserver.key
+
+# Virtual hosts
+virtual_hosts:
+  - name: default
+    server_name: localhost
+    document_root: /var/www/html
+    ssl_enabled: true
+
+# Security settings
+security:
+  mod_security: true
+  fail2ban: true
+  firewall_rules:
+    - port: 80
+      protocol: tcp
+    - port: 443
+      protocol: tcp 

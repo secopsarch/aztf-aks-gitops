@@ -1,0 +1,36 @@
+---
+- name: Update and patch Linux systems
+  hosts: linux_servers
+  become: true
+  tasks:
+    - name: Update apt cache (Ubuntu)
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Update yum cache (RHEL)
+      yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Apply security updates
+      package:
+        name: "*"
+        state: latest
+        update_cache: yes
+
+- name: Update Windows systems
+  hosts: windows_servers
+  become: true
+  tasks:
+    - name: Install Windows updates
+      win_updates:
+        category_names:
+          - SecurityUpdates
+          - CriticalUpdates
+        state: installed
+      register: win_updates_result
+
+    - name: Reboot if required
+      win_reboot:
+      when: win_updates_result.reboot_required 

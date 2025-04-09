@@ -5,10 +5,18 @@ terraform {
       version = ">=3.0.0"
     }
   }
+
+  backend "azurerm" {
+    resource_group_name  = "tf-statestorage-rg"
+    storage_account_name = "azlabstatefilestorage"
+    container_name       = "tfstatefiles"
+    key                  = "linuxsandbox.terraform.tfstate"
+  }
 }
 
 provider "azurerm" {
   features {}
+  subscription_id = "01bfbbdc-7cd9-42c4-9f81-fcd897c18fa8"
 }
 
 # Common variables
@@ -36,4 +44,4 @@ module "linux_vms" {
   admin_username      = var.admin_username
   ssh_public_key      = var.ssh_public_key
   tags                = local.tags
-} 
+}
