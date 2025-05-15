@@ -1,14 +1,13 @@
 # Infrastructure Documentation
 
 ## Overview
-This directory contains the Terraform infrastructure code for deploying our application to AWS ECS Fargate using GitOps principles.
+This project uses a simple AWS ECS Fargate setup to deploy a containerized web application.
 
 ## Infrastructure Components
 
 ### Network Layer
-- VPC with public and private subnets
-- Internet Gateway for public subnets
-- NAT Gateway for private subnet outbound traffic
+- VPC with public subnets
+- Internet Gateway for public access
 - Route tables for subnet traffic management
 
 ### Container Infrastructure
@@ -41,13 +40,35 @@ Located in `environments/prod`:
 - Multi-AZ deployment
 - Enhanced monitoring
 
-## GitOps Workflow
+## Deployment Process
 
-1. Infrastructure changes are proposed via merge requests
-2. Terraform plan is automatically generated and added to the MR
-3. Approval required for infrastructure changes
-4. Automatic apply on merge to main branch
-5. State stored in S3 with DynamoDB locking
+1. **Local Setup**
+   - Run `scripts/setup.sh` to create:
+     - S3 bucket for Terraform state
+     - DynamoDB table for state locking
+     - ECR repository for container images
+
+2. **GitLab Setup**
+   Configure the following variables in GitLab CI/CD settings:
+   ```
+   AWS_ACCESS_KEY_ID
+   AWS_SECRET_ACCESS_KEY
+   AWS_DEFAULT_REGION=us-west-2
+   AWS_ACCOUNT_ID
+   CI_ENVIRONMENT_NAME=dev
+   ```
+
+3. **Deployment Flow**
+   - Push to main branch triggers:
+     - Application testing
+     - Container build and push to ECR
+     - Terraform plan generation
+     - Infrastructure deployment
+   
+4. **State Management**
+   - Terraform state in S3: `legacy-app-terraform-state`
+   - State locking: DynamoDB table `terraform-state-lock`
+   - Environment separation: dev/prod state files
 
 ## Prerequisites
 

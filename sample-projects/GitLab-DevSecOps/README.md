@@ -1,6 +1,6 @@
-# GitLab DevSecOps Demo Project
+# Simple GitLab CI/CD Demo Project
 
-This project demonstrates a complete CI/CD pipeline using GitLab with integrated security scanning for a containerized application deployed to AWS ECS Fargate using GitOps practices and Terraform.
+This project demonstrates a straightforward CI/CD pipeline using GitLab for deploying a containerized web application to AWS ECS Fargate using Terraform.
 
 ## Architecture Overview
 
@@ -10,14 +10,11 @@ graph LR
     A[Developer Push] --> B[GitLab CI/CD]
     subgraph "Pipeline Stages"
         B --> C[Test]
-        C --> D[Security Scan]
-        D --> E[Build]
-        E --> F[Terraform]
-        F --> G[Deploy]
+        C --> D[Build]
+        D --> E[Deploy]
     end
-    E --> H[(Container Registry)]
-    F --> I[(AWS ECS Fargate)]
-    G --> I
+    D --> F[(Container Registry)]
+    E --> G[(AWS ECS Fargate)]
 ```
 
 ### Infrastructure Architecture
@@ -27,63 +24,36 @@ graph TB
         subgraph "VPC"
             subgraph "Public Subnet"
                 ALB[Application Load Balancer]
-            end
-            subgraph "Private Subnet"
                 ECS[ECS Fargate Service]
-                ECS --> ContainerA[Container Instance A]
-                ECS --> ContainerB[Container Instance B]
+                ECS --> Container[Container Instance]
             end
-        end
-        
-        subgraph "Security & Monitoring"
-            CW[CloudWatch]
-            WAF[AWS WAF]
         end
         
         subgraph "CI/CD Integration"
-            ECR[Container Registry]
+            Registry[Container Registry]
             S3[Terraform State]
-            DDB[DynamoDB Lock Table]
         end
     end
     
-    Internet((Internet)) --> WAF
-    WAF --> ALB
+    Internet((Internet)) --> ALB
     ALB --> ECS
-    ECS --> ECR
-    ECS --> CW
+    ECS --> Registry
 ```
 
-### Security Implementation
+### Basic Security
 ```mermaid
 graph TB
-    subgraph "Security Layers"
+    subgraph "Security Measures"
         direction LR
-        subgraph "Application Security"
-            SAST[Static Analysis]
-            DEP[Dependency Scan]
-            SEC[Secret Detection]
-        end
-        
-        subgraph "Container Security"
-            CSCAN[Container Scan]
-            CBUILD[Secure Build]
-            CRUN[Runtime Protection]
-        end
-        
-        subgraph "Infrastructure Security"
-            NETSEC[Network Security]
-            IAM[IAM Roles/Policies]
-            CLOUD[Cloud Security]
+        subgraph "Basic Security"
+            AUTH[Authentication]
+            NET[Network Security]
+            LOG[Basic Logging]
         end
     end
     
-    SAST --> CSCAN
-    DEP --> CBUILD
-    SEC --> CRUN
-    CSCAN --> NETSEC
-    CBUILD --> IAM
-    CRUN --> CLOUD
+    AUTH --> NET
+    NET --> LOG
 ```
 
 ## Documentation Index

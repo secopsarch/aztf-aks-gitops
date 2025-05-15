@@ -1,28 +1,29 @@
-# Pipeline Documentation
+# Legacy App Containerization & GitOps Pipeline
 
 ## Overview
-This document details the GitLab CI/CD pipeline stages and their purposes.
+This document outlines our approach to containerizing and deploying a legacy application using GitLab CI/CD and GitOps practices.
 
-## Pipeline Stages
+## Pipeline Stages and Tools
 
 ### 1. Test Stage
+The test stage includes basic code quality checks and testing:
+
+| Tool | Purpose |
+|------|---------|
+| HTMLHint | HTML code quality checking |
+| Jest | JavaScript unit testing |
+
 ```yaml
 test:
   - HTML linting
-  - Static asset validation
   - Unit tests
 ```
 
-### 2. Security Scan Stage
-```yaml
-scan:
-  - SAST scanning
-  - Secret detection
-  - Dependency scanning
-  - Container scanning
-```
+### 2. Build Stage
+| Tool | Purpose |
+|------|---------|
+| Docker | Building and pushing container images |
 
-### 3. Build Stage
 ```yaml
 build:
   - Docker image building
@@ -30,21 +31,61 @@ build:
   - Push to registry
 ```
 
-### 4. Terraform Stage
-```yaml
-terraform:
-  - Infrastructure plan
-  - Plan review
-  - Infrastructure apply
-```
+### 3. Deploy Stage
+| Tool | Purpose |
+|------|---------|
+| AWS CLI | Deploying to ECS Fargate |
 
-### 5. Deploy Stage
 ```yaml
 deploy:
   - ECS service update
   - Health checks
-  - Rollback capability
 ```
+
+## Required Variables
+
+### GitLab CI/CD Variables
+```yaml
+# Required Variables
+- CI_REGISTRY_USER        # GitLab registry username
+- CI_REGISTRY_PASSWORD    # GitLab registry password
+- AWS_ACCESS_KEY_ID      # AWS access key
+- AWS_SECRET_ACCESS_KEY  # AWS secret key
+- AWS_DEFAULT_REGION     # AWS region (e.g., us-west-2)
+- ECS_CLUSTER_NAME       # Name of your ECS cluster
+- ECS_SERVICE_NAME       # Name of your ECS service
+```
+
+## Deployment Strategy
+
+### Simple Deployment Flow
+1. Code changes pushed to main branch
+2. Basic tests run (HTML lint and unit tests)
+3. Docker image built and pushed
+4. ECS service updated with new image
+
+### Deployment Process
+1. Build and tag Docker image
+2. Push image to GitLab registry
+3. Update ECS service
+4. ECS handles rolling deployment
+
+### Monitoring
+- ECS service health checks
+- Application Load Balancer health checks
+- CloudWatch basic metrics
+
+## Troubleshooting
+
+### Common Issues
+1. Pipeline failures
+   - Check test logs
+   - Verify Docker build steps
+   - Check AWS credentials
+2. Deployment issues
+   - Check ECS service events
+   - Verify container health checks
+   - Check task definition
 
 ## Pipeline Configuration
 

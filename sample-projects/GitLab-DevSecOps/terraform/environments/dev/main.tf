@@ -1,15 +1,29 @@
+terraform {
+  backend "s3" {
+    bucket         = "legacy-app-terraform-state"
+    key            = "dev/terraform.tfstate"
+    region         = "us-west-2"
+    dynamodb_table = "terraform-state-lock"
+    encrypt        = true
+  }
+}
+
 module "ecs" {
   source = "../../modules/ecs"
 
-  aws_region            = "us-west-2"
-  project_name          = "gitlab-devsecops"
-  environment          = "dev"
-  vpc_cidr             = "10.0.0.0/16"
-  task_cpu             = 256
-  task_memory          = 512
-  container_image      = "registry.gitlab.com/your-project/your-image:latest"
-  container_port       = 80
-  service_desired_count = 1
+  aws_region       = var.aws_region
+  project_name     = "legacy-app"
+  environment      = var.environment
+  container_image  = var.container_image
+  
+  # Development settings
+  task_cpu        = 256
+  task_memory     = 512
+  desired_count   = 1
+
+  # Optional overrides
+  container_port  = 80
+  health_check_path = "/health"
 }
 
 terraform {

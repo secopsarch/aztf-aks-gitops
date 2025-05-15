@@ -1,0 +1,12 @@
+{
+  "name": "legacy-app",
+  "version": "1.0.0",
+  "description": "Legacy application containerization demo",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0",
+    "lint": "eslint src/*.js"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0"
+  }
+}

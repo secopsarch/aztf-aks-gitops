@@ -1,21 +1,19 @@
-# Security Implementation Guide
+# Basic Security Guide
 
 ## Overview
-This document outlines the security measures implemented in our GitLab DevSecOps pipeline and infrastructure.
+This document outlines the basic security measures implemented in our simple CI/CD pipeline and infrastructure.
 
-## Pipeline Security Measures
+## Security Measures
 
-### 1. Container Scanning
-- Using Trivy for container vulnerability scanning
-- Scanning base images and application dependencies
-- Automated scanning in CI/CD pipeline
-- Policy enforcement for critical vulnerabilities
+### 1. Authentication & Authorization
+- AWS IAM roles with necessary permissions
+- GitLab registry authentication
+- ECS task execution roles
 
-### 2. SAST (Static Application Security Testing)
-- GitLab built-in SAST analyzers
-- Custom rulesets for application-specific threats
-- Automated code review for security issues
-- Coverage reports in merge requests
+### 2. Network Security
+- Application Load Balancer with HTTPS support
+- Security groups with required ports only
+- VPC with proper routing
 
 ### 3. Dependency Scanning
 - Regular scanning of dependencies
