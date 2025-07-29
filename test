@@ -1,0 +1,80 @@
+#!/bin/bash
+LOG="/tmp/linux9_audit_check.log"
+echo "==== CIS Linux 9 Audit Check: $(date) ====" > "$LOG"
+
+# 5.1.7 - cron.d ownership and permissions
+echo "[5.1.7] Checking /etc/cron.d permissions" >> "$LOG"
+ls -ld /etc/cron.d >> "$LOG"
+
+# 1.9 - Installed updates
+echo "[1.9] Checking if system is up to date" >> "$LOG"
+dnf check-update >> "$LOG" 2>&1
+
+# 1.1.2.3 - /tmp noexec
+echo "[1.1.2.3] Checking /tmp mount options in /etc/fstab" >> "$LOG"
+grep -E '^[^#].*\s/tmp\s' /etc/fstab >> "$LOG"
+
+# 1.6.1.6 - unconfined_service_t
+echo "[1.6.1.6] Checking for unconfined_service_t processes" >> "$LOG"
+ps -eZ | grep unconfined_service_t >> "$LOG"
+
+# 2.2.1.5 - chronyd configuration
+echo "[2.2.1.5] Checking chronyd status" >> "$LOG"
+systemctl is-enabled chronyd >> "$LOG"
+chronyc sources >> "$LOG" 2>/dev/null
+
+# 3.3.7 - rp_filter
+echo "[3.3.7] Checking rp_filter setting" >> "$LOG"
+sysctl net.ipv4.conf.default.rp_filter >> "$LOG"
+
+# 4.2.1.6 - rsyslog remote
+echo "[4.2.1.6] Checking rsyslog remote log host config" >> "$LOG"
+grep -E '@@|@' /etc/rsyslog.conf /etc/rsyslog.d/*.conf 2>/dev/null >> "$LOG"
+
+# 4.2.2.5 - journal to rsyslog
+echo "[4.2.2.5] Checking journald forwarding" >> "$LOG"
+grep ForwardToSyslog /etc/systemd/journald.conf >> "$LOG"
+
+# 5.5.2 - unlock_time
+echo "[5.5.2] Checking unlock_time config" >> "$LOG"
+grep unlock_time /etc/security/faillock.conf /etc/pam.d/* 2>/dev/null >> "$LOG"
+
+# 5.6.1.2 - min password days
+echo "[5.6.1.2] Checking minimum password age" >> "$LOG"
+awk -F: '$2 >= 0 { print $1, $4 }' /etc/shadow >> "$LOG"
+
+# 5.6.1.4 - password expiration
+echo "[5.6.1.4] Checking max password age" >> "$LOG"
+awk -F: '$2 >= 0 { print $1, $5 }' /etc/shadow >> "$LOG"
+
+# 5.6.2.2 - system accounts no login
+echo "[5.6.2.2] Checking system accounts shell" >> "$LOG"
+awk -F: '($3 < 1000 && $1 != "root") { print $1, $7 }' /etc/passwd >> "$LOG"
+
+# 4.2.1.5 - logging enabled
+echo "[4.2.1.5] Checking rsyslog and journald status" >> "$LOG"
+systemctl is-active rsyslog >> "$LOG"
+systemctl is-active systemd-journald >> "$LOG"
+
+# 6.1.9 - no world-writable files
+echo "[6.1.9] Checking for world-writable files (may take time)" >> "$LOG"
+find / -xdev -type f -perm -0002 -exec ls -l {} \; 2>/dev/null >> "$LOG"
+
+# 6.1.10 - no unowned files
+echo "[6.1.10] Checking for unowned files" >> "$LOG"
+find / -xdev -nouser 2>/dev/null >> "$LOG"
+
+# 6.1.11 - no ungrouped files
+echo "[6.1.11] Checking for ungrouped files" >> "$LOG"
+find / -xdev -nogroup 2>/dev/null >> "$LOG"
+
+# 4.2.3.2 - systemd-journal-remote
+echo "[4.2.3.2] Checking systemd-journal-remote" >> "$LOG"
+systemctl is-enabled systemd-journal-remote >> "$LOG" 2>/dev/null
+
+# 4.2.3.1 - logfile permissions
+echo "[4.2.3.1] Checking log file permissions" >> "$LOG"
+find /var/log -type f -exec ls -l {} \; >> "$LOG"
+
+echo "==== Audit Check Completed at $(date) ====" >> "$LOG"
+echo "Check completed. See log: $LOG"
