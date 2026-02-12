@@ -1,0 +1,411 @@
+#cloud-config
+# CRC Bootstrap for Ubuntu 22.04 on Azure
+# All bash variables properly escaped for Terraform templatefile()
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - qemu-kvm
+  - libvirt-daemon-system
+  - libvirt-clients
+  - bridge-utils
+  - cpu-checker
+  - wget
+  - tar
+  - bash-completion
+  - podman
+  - jq
+  - azure-cli
+
+bootcmd:
+  - [ sh, -c, "echo 'options kvm_intel nested=1' > /etc/modprobe.d/kvm-intel.conf" ]
+  - [ sh, -c, "echo 'options kvm_amd nested=1' > /etc/modprobe.d/kvm-amd.conf" ]
+
+write_files:
+  - path: /tmp/pull-secret.json
+    permissions: "0600"
+    content: |
+      ${pull_secret}
+
+  - path: /usr/local/bin/setup-crc.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+      
+      USER_NAME="${USER_NAME}"
+      DISK="${DISK}"
+      MOUNT="${MOUNT}"
+      CRC_BASE="${CRC_BASE}"
+      USER_HOME="/home/$USER_NAME"
+      USER_CRC_DIR="$USER_HOME/.crc"
+      
+      exec 1> >(tee -a /var/log/crc-setup.log)
+      exec 2>&1
+      
+      echo "==================================="
+      echo "CRC Setup Started: $(date)"
+      echo "==================================="
+      
+      echo "Waiting for disk $DISK..."
+      for i in {1..60}; do
+        if [ -b "$DISK" ]; then
+          echo "Disk $DISK found"
+          break
+        fi
+        sleep 1
+      done
+      
+      if [ ! -b "$DISK" ]; then
+        echo "ERROR: Disk $DISK not found"
+        exit 1
+      fi
+      
+      echo "Setting up data disk..."
+      parted $DISK --script mklabel gpt
+      parted $DISK --script mkpart primary ext4 0% 100%
+      sleep 2
+      partprobe $DISK
+      sleep 2
+      
+      mkfs.ext4 -F $${DISK}1
+      mkdir -p $MOUNT
+      mount $${DISK}1 $MOUNT
+      
+      UUID=$(blkid -s UUID -o value $${DISK}1)
+      echo "UUID=$UUID $MOUNT ext4 defaults,nofail 0 2" >> /etc/fstab
+      
+      mkdir -p $CRC_BASE
+      chown -R $USER_NAME:$USER_NAME $MOUNT
+      
+      if [ -d "$USER_CRC_DIR" ] && [ ! -L "$USER_CRC_DIR" ]; then
+        rm -rf "$USER_CRC_DIR"
+      fi
+      sudo -u $USER_NAME ln -sf $CRC_BASE $USER_CRC_DIR
+      
+      echo "Data disk setup complete"
+      df -h $MOUNT
+      
+      echo "Setting up libvirt..."
+      systemctl enable libvirtd
+      systemctl start libvirtd
+      usermod -aG libvirt $USER_NAME
+      usermod -aG kvm $USER_NAME
+      
+      echo "Downloading CRC..."
+      wget -q --show-progress \
+        "https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/crc/latest/crc-linux-amd64.tar.xz" \
+        -O /tmp/crc.tar.xz
+      
+      echo "Installing CRC..."
+      tar -xf /tmp/crc.tar.xz -C /tmp
+      mv /tmp/crc-linux-*/crc /usr/local/bin/
+      chmod +x /usr/local/bin/crc
+      rm -rf /tmp/crc.tar.xz /tmp/crc-linux-*
+      
+      if [ -f /tmp/pull-secret.json ]; then
+        mv /tmp/pull-secret.json $USER_HOME/pull-secret.json
+        chown $USER_NAME:$USER_NAME $USER_HOME/pull-secret.json
+        chmod 600 $USER_HOME/pull-secret.json
+        echo "Pull secret saved"
+      fi
+      
+      echo "Running CRC setup and configuration as $USER_NAME..."
+      sudo -i -u $USER_NAME bash << 'EOF'
+      set -euxo pipefail
+      
+      echo "CRC version:"
+      crc version
+      
+      echo "Running CRC setup..."
+      crc setup
+      
+      echo "Configuring CRC (userland network mode)..."
+      crc config set consent-telemetry no
+      crc config set cpus 4
+      crc config set memory 12288
+      crc config set disk-size 50
+      crc config set disable-update-check true
+      crc config set network-mode user
+      
+      echo ""
+      echo "CRC Configuration:"
+      crc config view
+      echo ""
+      EOF
+      
+      echo "==================================="
+      echo "CRC Setup Completed: $(date)"
+      echo "==================================="
+
+  - path: /usr/local/bin/setup-user-env.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+      
+      USER_NAME="${USER_NAME}"
+      USER_HOME="/home/$USER_NAME"
+      
+      sudo -i -u $USER_NAME bash << 'USEREOF'
+      cat >> ~/.bashrc << 'BASHRC'
+      
+      # CRC environment
+      if command -v crc >/dev/null 2>&1; then
+        eval $(crc oc-env) 2>/dev/null || true
+      fi
+      
+      parse_git_branch() {
+        git branch 2>/dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/(\1)/'
+      }
+      PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[01;31m\]$(parse_git_branch)\[\033[00m\]\$ '
+      
+      export PATH=$HOME/bin:$PATH
+      
+      alias k=kubectl
+      alias oclogin='eval $(crc console --credentials 2>/dev/null | grep "oc login")'
+      alias crc-start='crc start -p ~/pull-secret.json'
+      
+      BASHRC
+      
+      cat > ~/start-crc.sh << 'STARTSCRIPT'
+      #!/bin/bash
+      if [ ! -f ~/pull-secret.json ]; then
+        echo "ERROR: pull-secret.json not found"
+        exit 1
+      fi
+      
+      echo "Starting CRC (userland network mode)..."
+      crc start -p ~/pull-secret.json
+      
+      if [ $? -eq 0 ]; then
+        echo "✅ CRC Started!"
+        echo "Credentials: crc console --credentials"
+      fi
+      STARTSCRIPT
+      
+      chmod +x ~/start-crc.sh
+      
+      cat > ~/CRC-README.txt << 'README'
+      CRC Lab - Quick Start
+      =====================
+      
+      Start CRC: ./start-crc.sh
+      Stop CRC: crc stop
+      Status: crc status
+      Logs: cat ~/crc-start-debug.log
+      
+      Auto-Deallocate:
+        - Deallocates after 30min of terminal inactivity
+        - Check: sudo systemctl status auto-deallocate
+        - Logs: sudo tail -f /var/log/auto-shutdown.log
+      
+      README
+      
+      USEREOF
+      
+      echo "User environment configured"
+
+  - path: /usr/local/bin/auto-start-crc.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+      
+      USER_NAME="${USER_NAME}"
+      USER_HOME="/home/$USER_NAME"
+      
+      echo "Auto-starting CRC: $(date)"
+      sleep 10
+      
+      sudo -i -u $USER_NAME bash << 'EOF'
+      set -euxo pipefail
+      
+      if [ ! -f ~/pull-secret.json ]; then
+        echo "ERROR: pull-secret.json not found" | tee ~/crc-start-debug.log
+        exit 1
+      fi
+      
+      echo "Starting CRC at $(date)..." | tee ~/crc-start-debug.log
+      
+      crc start -p ~/pull-secret.json --log-level=debug 2>&1 | tee -a ~/crc-start-debug.log
+      
+      CRC_EXIT_CODE=$${PIPESTATUS[0]}
+      
+      echo "" | tee -a ~/crc-start-debug.log
+      echo "CRC Start Completed: $(date)" | tee -a ~/crc-start-debug.log
+      echo "Exit Code: $CRC_EXIT_CODE" | tee -a ~/crc-start-debug.log
+      
+      if [ $CRC_EXIT_CODE -eq 0 ]; then
+        echo "✅ CRC Started Successfully!" | tee -a ~/crc-start-debug.log
+        crc console --credentials >> ~/crc-start-debug.log 2>&1 || true
+      else
+        echo "❌ CRC Start Failed!" | tee -a ~/crc-start-debug.log
+      fi
+      
+      EOF
+
+  - path: /usr/local/bin/auto-deallocate.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      IDLE_TIME_THRESHOLD=1500
+      CHECK_INTERVAL=300
+      LOG_FILE="/var/log/auto-shutdown.log"
+      USER_NAME="${USER_NAME}"
+      
+      log_message() {
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] $$1" | tee -a "$$LOG_FILE"
+      }
+      
+      get_vm_metadata() {
+          VM_NAME=$$(curl -s -H Metadata:true --noproxy "*" \
+              "http://169.254.169.254/metadata/instance/compute/name?api-version=2021-02-01&format=text" 2>/dev/null)
+          RESOURCE_GROUP=$$(curl -s -H Metadata:true --noproxy "*" \
+              "http://169.254.169.254/metadata/instance/compute/resourceGroupName?api-version=2021-02-01&format=text" 2>/dev/null)
+          
+          if [ -z "$$VM_NAME" ] || [ -z "$$RESOURCE_GROUP" ]; then
+              log_message "ERROR: Could not retrieve VM metadata"
+              exit 1
+          fi
+          log_message "VM: $$VM_NAME, RG: $$RESOURCE_GROUP"
+      }
+      
+      check_azure_cli() {
+          if ! command -v az &> /dev/null; then
+              log_message "ERROR: Azure CLI not installed"
+              exit 1
+          fi
+          
+          if ! az account show &> /dev/null; then
+              log_message "Attempting managed identity login..."
+              az login --identity 2>/dev/null || log_message "WARNING: Managed identity login failed"
+          fi
+      }
+      
+      get_terminal_idle_time() {
+          local min_idle=999999
+          local activity_found=false
+          
+          for dev in /dev/pts/* /dev/tty[0-9]* 2>/dev/null; do
+              if [ -c "$$dev" ] 2>/dev/null; then
+                  local last_access=$$(stat -c %X "$$dev" 2>/dev/null)
+                  if [ -n "$$last_access" ] && [ "$$last_access" -gt 0 ]; then
+                      local current_time=$$(date +%s)
+                      local idle=$$((current_time - last_access))
+                      if [ $$idle -lt $$min_idle ]; then
+                          min_idle=$$idle
+                          activity_found=true
+                      fi
+                  fi
+              fi
+          done
+          
+          if [ "$$activity_found" = false ]; then
+              echo 999999
+          else
+              echo $$min_idle
+          fi
+      }
+      
+      stop_crc_if_running() {
+          log_message "Checking CRC..."
+          
+          if ! id "$$USER_NAME" &>/dev/null; then
+              return 0
+          fi
+          
+          local crc_status=$$(su - "$$USER_NAME" -c "crc status 2>&1" | grep -i "CRC VM" | awk '{print $$NF}' || echo "Unknown")
+          log_message "CRC Status: $$crc_status"
+          
+          if [[ "$$crc_status" == "Running" ]]; then
+              log_message "Stopping CRC..."
+              su - "$$USER_NAME" -c "crc stop" 2>&1 | tee -a "$$LOG_FILE"
+          fi
+      }
+      
+      deallocate_vm() {
+          log_message "========================================="
+          log_message "INITIATING VM DEALLOCATION"
+          log_message "========================================="
+          
+          wall "⚠️  VM DEALLOCATION IN 60 SECONDS ⚠️" 2>/dev/null || true
+          sleep 60
+          
+          local final_idle=$$(get_terminal_idle_time)
+          log_message "Final idle: $${final_idle}s"
+          
+          if [ $$final_idle -ge $$IDLE_TIME_THRESHOLD ]; then
+              stop_crc_if_running
+              log_message "Deallocating VM..."
+              az vm deallocate --resource-group "$$RESOURCE_GROUP" --name "$$VM_NAME" --no-wait 2>&1 | tee -a "$$LOG_FILE"
+          else
+              log_message "Cancelled - activity detected"
+          fi
+      }
+      
+      log_message "Auto-Deallocate Monitor Started"
+      log_message "Threshold: 30min, Check: 5min"
+      
+      get_vm_metadata
+      check_azure_cli
+      
+      while true; do
+          sleep $$CHECK_INTERVAL
+          idle_time=$$(get_terminal_idle_time)
+          time_remaining=$$((IDLE_TIME_THRESHOLD - idle_time))
+          
+          if [ $$time_remaining -gt 0 ]; then
+              log_message "Idle: $${idle_time}s | Deallocation in: $${time_remaining}s"
+          else
+              log_message "Idle: $${idle_time}s | THRESHOLD EXCEEDED"
+              deallocate_vm
+              break
+          fi
+      done
+
+  - path: /etc/systemd/system/auto-deallocate.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Auto-deallocate VM on inactivity
+      After=network-online.target cloud-final.service
+      Wants=network-online.target
+      
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/auto-deallocate.sh
+      Restart=on-failure
+      RestartSec=60
+      StandardOutput=append:/var/log/auto-shutdown.log
+      StandardError=append:/var/log/auto-shutdown.log
+      
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - [ sh, -c, "sleep 10" ]
+  - [ bash, /usr/local/bin/setup-crc.sh ]
+  - [ bash, /usr/local/bin/setup-user-env.sh ]
+  - [ bash, /usr/local/bin/auto-start-crc.sh ]
+  - [ systemctl, daemon-reload ]
+  - [ systemctl, enable, auto-deallocate.service ]
+  - [ systemctl, start, auto-deallocate.service ]
+  - [ sh, -c, "echo 'Setup complete: $(date)' > /var/lib/cloud/instance/crc-setup-complete" ]
+
+final_message: |
+  ============================================
+  CRC Lab VM Ready!
+  ============================================
+  
+  CRC auto-started with debug logging
+  Auto-deallocate enabled (30min idle)
+  
+  Logs:
+    cat ~/crc-start-debug.log
+    sudo tail -f /var/log/auto-shutdown.log
+  
+  Service:
+    sudo systemctl status auto-deallocate
+  ============================================

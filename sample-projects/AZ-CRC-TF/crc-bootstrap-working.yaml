@@ -1,0 +1,254 @@
+#cloud-config
+# CRC Bootstrap for Ubuntu 22.04 on Azure
+# Fixed: Proper HOME environment for all CRC commands
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - qemu-kvm
+  - libvirt-daemon-system
+  - libvirt-clients
+  - bridge-utils
+  - cpu-checker
+  - wget
+  - tar
+  - bash-completion
+  - podman
+  - jq
+
+bootcmd:
+  - [ sh, -c, "echo 'options kvm_intel nested=1' > /etc/modprobe.d/kvm-intel.conf" ]
+  - [ sh, -c, "echo 'options kvm_amd nested=1' > /etc/modprobe.d/kvm-amd.conf" ]
+
+write_files:
+  - path: /tmp/pull-secret.json
+    permissions: "0600"
+    content: |
+      ${pull_secret}
+
+  - path: /usr/local/bin/setup-crc.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+      
+      USER_NAME="${USER_NAME}"
+      DISK="${DISK}"
+      MOUNT="${MOUNT}"
+      CRC_BASE="${CRC_BASE}"
+      USER_HOME="/home/$USER_NAME"
+      USER_CRC_DIR="$USER_HOME/.crc"
+      
+      exec 1> >(tee -a /var/log/crc-setup.log)
+      exec 2>&1
+      
+      echo "==================================="
+      echo "CRC Setup Started: $(date)"
+      echo "==================================="
+      
+      # Wait for disk
+      echo "Waiting for disk $DISK..."
+      for i in {1..60}; do
+        if [ -b "$DISK" ]; then
+          echo "Disk $DISK found"
+          break
+        fi
+        sleep 1
+      done
+      
+      if [ ! -b "$DISK" ]; then
+        echo "ERROR: Disk $DISK not found"
+        exit 1
+      fi
+      
+      # Setup disk
+      echo "Setting up data disk..."
+      parted $DISK --script mklabel gpt
+      parted $DISK --script mkpart primary ext4 0% 100%
+      sleep 2
+      partprobe $DISK
+      sleep 2
+      
+      mkfs.ext4 -F ${DISK}1
+      mkdir -p $MOUNT
+      mount ${DISK}1 $MOUNT
+      
+      UUID=$(blkid -s UUID -o value ${DISK}1)
+      echo "UUID=$UUID $MOUNT ext4 defaults,nofail 0 2" >> /etc/fstab
+      
+      mkdir -p $CRC_BASE
+      chown -R $USER_NAME:$USER_NAME $MOUNT
+      
+      # Setup symlink
+      if [ -d "$USER_CRC_DIR" ] && [ ! -L "$USER_CRC_DIR" ]; then
+        rm -rf "$USER_CRC_DIR"
+      fi
+      sudo -u $USER_NAME ln -sf $CRC_BASE $USER_CRC_DIR
+      
+      echo "Data disk setup complete"
+      df -h $MOUNT
+      
+      # Setup libvirt
+      echo "Setting up libvirt..."
+      systemctl enable libvirtd
+      systemctl start libvirtd
+      usermod -aG libvirt $USER_NAME
+      usermod -aG kvm $USER_NAME
+      
+      # Download CRC
+      echo "Downloading CRC..."
+      wget -q --show-progress \
+        "https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/crc/latest/crc-linux-amd64.tar.xz" \
+        -O /tmp/crc.tar.xz
+      
+      echo "Installing CRC..."
+      tar -xf /tmp/crc.tar.xz -C /tmp
+      mv /tmp/crc-linux-*/crc /usr/local/bin/
+      chmod +x /usr/local/bin/crc
+      rm -rf /tmp/crc.tar.xz /tmp/crc-linux-*
+      
+      # Move pull secret
+      if [ -f /tmp/pull-secret.json ]; then
+        mv /tmp/pull-secret.json $USER_HOME/pull-secret.json
+        chown $USER_NAME:$USER_NAME $USER_HOME/pull-secret.json
+        chmod 600 $USER_HOME/pull-secret.json
+        echo "Pull secret saved"
+      fi
+      
+      # CRITICAL: Run ALL CRC commands as user with proper environment
+      echo "Running CRC setup and configuration as $USER_NAME..."
+      sudo -i -u $USER_NAME bash << 'EOF'
+      set -euxo pipefail
+      
+      echo "CRC version:"
+      crc version
+      
+      echo "Running CRC setup..."
+      crc setup
+      
+      echo "Configuring CRC (userland network mode for Azure)..."
+      crc config set consent-telemetry no
+      crc config set cpus 4
+      crc config set memory 12288
+      crc config set disk-size 50
+      crc config set disable-update-check true
+      crc config set network-mode user
+      
+      echo ""
+      echo "CRC Configuration:"
+      crc config view
+      echo ""
+      EOF
+      
+      echo "==================================="
+      echo "CRC Setup Completed: $(date)"
+      echo "==================================="
+
+  - path: /usr/local/bin/setup-user-env.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+      
+      USER_NAME="${USER_NAME}"
+      USER_HOME="/home/$USER_NAME"
+      
+      sudo -i -u $USER_NAME bash << 'USEREOF'
+      # Add to bashrc
+      cat >> ~/.bashrc << 'BASHRC'
+      
+      # CRC environment
+      if command -v crc >/dev/null 2>&1; then
+        eval $(crc oc-env) 2>/dev/null || true
+      fi
+      
+      # Git-aware prompt
+      parse_git_branch() {
+        git branch 2>/dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/(\1)/'
+      }
+      PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[01;31m\]$(parse_git_branch)\[\033[00m\]\$ '
+      
+      export PATH=$HOME/bin:$PATH
+      
+      alias k=kubectl
+      alias oclogin='eval $(crc console --credentials 2>/dev/null | grep "oc login")'
+      alias crc-start='crc start -p ~/pull-secret.json'
+      
+      BASHRC
+      
+      # Create start script
+      cat > ~/start-crc.sh << 'STARTSCRIPT'
+      #!/bin/bash
+      if [ ! -f ~/pull-secret.json ]; then
+        echo "ERROR: pull-secret.json not found"
+        exit 1
+      fi
+      
+      echo "=========================================="
+      echo "Starting CRC (userland network mode)"
+      echo "First start: 10-15 minutes"
+      echo "=========================================="
+      echo ""
+      
+      crc start -p ~/pull-secret.json
+      
+      if [ $? -eq 0 ]; then
+        echo ""
+        echo "✅ CRC Started Successfully!"
+        echo ""
+        echo "Get credentials:"
+        echo "  crc console --credentials"
+        echo ""
+        echo "Login:"
+        echo "  eval \$(crc oc-env)"
+        echo "  oc login -u kubeadmin https://api.crc.testing:6443"
+      fi
+      STARTSCRIPT
+      
+      chmod +x ~/start-crc.sh
+      
+      # Create README
+      cat > ~/CRC-README.txt << 'README'
+      CRC Lab Environment - Quick Start
+      ==================================
+      
+      Network Mode: USERLAND (Azure compatible)
+      Storage: ~/.crc -> /labocp/crc
+      
+      Quick Start:
+        ./start-crc.sh
+      
+      Commands:
+        crc status
+        crc stop
+        crc console --credentials
+        crc logs
+      
+      Verify:
+        ls -l ~/.crc
+        crc config view
+        df -h /labocp
+      
+      README
+      
+      USEREOF
+      
+      echo "User environment configured"
+
+runcmd:
+  - [ sh, -c, "sleep 10" ]
+  - [ bash, /usr/local/bin/setup-crc.sh ]
+  - [ bash, /usr/local/bin/setup-user-env.sh ]
+  - [ sh, -c, "echo 'Setup complete: $(date)' > /var/lib/cloud/instance/crc-setup-complete" ]
+
+final_message: |
+  ============================================
+  CRC Lab VM Ready!
+  ============================================
+  
+  SSH and run: ./start-crc.sh
+  
+  Logs: cat /var/log/crc-setup.log
+  Config: crc config view
+  ============================================
